@@ -18,27 +18,53 @@
 */
 
 #include <SlowSoftI2CMaster.h>
+#include <arch/board/board.h>
+
+extern "C" {
+uint8_t pin_convert(uint8_t pin);
+}
 
 SlowSoftI2CMaster::SlowSoftI2CMaster(uint8_t sda, uint8_t scl) {
+#ifdef ARDUINO_ARCH_SPRESENSE
+  _sda = pin_convert(sda);
+  _scl = pin_convert(scl);
+#else
   _sda = sda;
   _scl = scl;
+#endif
   _pullup = false;
 }
 
 SlowSoftI2CMaster::SlowSoftI2CMaster(uint8_t sda, uint8_t scl, bool pullup) {
+#ifdef ARDUINO_ARCH_SPRESENSE
+  _sda = pin_convert(sda);
+  _scl = pin_convert(scl);
+#else
   _sda = sda;
   _scl = scl;
+#endif
   _pullup = pullup;
 }
 // Init function. Needs to be called once in the beginning.
 // Returns false if SDA or SCL are low, which probably means 
 // a I2C bus lockup or that the lines are not pulled up.
 bool SlowSoftI2CMaster::i2c_init(void) {
+#ifdef ARDUINO_ARCH_SPRESENSE
+  board_gpio_config(_sda, 0, true, true, (_pullup) ? PIN_PULLUP : PIN_FLOAT);
+  board_gpio_config(_sda, 0, true, true, (_pullup) ? PIN_PULLUP : PIN_FLOAT);
+  board_gpio_write(_sda, LOW);
+  board_gpio_write(_scl, LOW);
+#else
   digitalWrite(_sda, LOW);
   digitalWrite(_scl, LOW);
+#endif
   setHigh(_sda);
   setHigh(_scl);
+#ifdef ARDUINO_ARCH_SPRESENSE
+  if (board_gpio_read(_sda) == LOW || board_gpio_read(_scl) == LOW) return false;
+#else
   if (digitalRead(_sda) == LOW || digitalRead(_scl) == LOW) return false;
+#endif
   return true;
 }
 
@@ -97,7 +123,11 @@ bool SlowSoftI2CMaster::i2c_write(uint8_t value) {
   setHigh(_sda);
   setHigh(_scl);
   delayMicroseconds(DELAY/2);
+#ifdef ARDUINO_ARCH_SPRESENSE
+  uint8_t ack = board_gpio_read(_sda);
+#else
   uint8_t ack = digitalRead(_sda);
+#endif
   setLow(_scl);
   delayMicroseconds(DELAY/2);  
   setLow(_sda);
@@ -113,7 +143,11 @@ uint8_t SlowSoftI2CMaster::i2c_read(bool last) {
     b <<= 1;
     delayMicroseconds(DELAY);
     setHigh(_scl);
+#ifdef ARDUINO_ARCH_SPRESENSE
+    if (board_gpio_read(_sda)) b |= 1;
+#else
     if (digitalRead(_sda)) b |= 1;
+#endif
     setLow(_scl);
   }
   if (last) setHigh(_sda); else setLow(_sda);
@@ -127,19 +161,27 @@ uint8_t SlowSoftI2CMaster::i2c_read(bool last) {
 
 void SlowSoftI2CMaster::setLow(uint8_t pin) {
     noInterrupts();
+#ifdef ARDUINO_ARCH_SPRESENSE
+    board_gpio_write(pin, LOW);
+#else
     if (_pullup) 
       digitalWrite(pin, LOW);
     pinMode(pin, OUTPUT);
+#endif
     interrupts();
 }
 
 
 void SlowSoftI2CMaster::setHigh(uint8_t pin) {
     noInterrupts();
+#ifdef ARDUINO_ARCH_SPRESENSE
+    board_gpio_write(pin, -1);
+#else
     if (_pullup) 
       pinMode(pin, INPUT_PULLUP);
     else
       pinMode(pin, INPUT);
+#endif
     interrupts();
 }
 
